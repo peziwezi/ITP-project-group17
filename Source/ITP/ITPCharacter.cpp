@@ -10,6 +10,7 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
+#include "Kismet/KismetMathLibrary.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -69,6 +70,13 @@ void AITPCharacter::BeginPlay()
 	}
 }
 
+void AITPCharacter::Tick(float deltaSeconds)
+{
+	delta = deltaSeconds;
+
+	DescendPlayer();
+}
+
 //////////////////////////////////////////////////////////////////////////
 // Input
 
@@ -80,6 +88,11 @@ void AITPCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 		// Jumping
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
+
+		// Gliding
+		EnhancedInputComponent->BindAction(GlideAction, ETriggerEvent::Started, this, &AITPCharacter::StartGliding);
+		EnhancedInputComponent->BindAction(GlideAction, ETriggerEvent::Completed, this, &AITPCharacter::StopGliding);
+
 
 		// Moving
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AITPCharacter::Move);
@@ -108,4 +121,73 @@ void AITPCharacter::Move(const FInputActionValue& Value)
 		// add movement 
 		AddMovementInput(RightDirection, MovementVector.X);
 	}
+}
+
+void AITPCharacter::StartGliding()
+{
+	if (!bIsGliding && CanStartGliding()) {
+		CurrentVelocity = GetCharacterMovement()->Velocity;
+		bIsGliding = true;
+
+		RecordOriginalSettings();
+
+		GetCharacterMovement()->GravityScale = 0.0;
+		GetCharacterMovement()->AirControl = 0.9;
+		GetCharacterMovement()->BrakingDecelerationFalling = 350.f;
+		GetCharacterMovement()->MaxAcceleration = 1024;
+		GetCharacterMovement()->MaxWalkSpeed = 600;
+	}
+}
+
+
+void AITPCharacter::StopGliding()
+{
+	ApplyOriginalSettings();
+	bIsGliding = false;
+}
+
+bool AITPCharacter::CanStartGliding()
+{
+	FHitResult Hit;
+
+	FVector TraceStart = GetActorLocation();
+	FVector TraceEnd = GetActorLocation() + GetActorUpVector() * minimumHeight * -1.f;
+
+	FCollisionQueryParams QueryParams;
+
+	QueryParams.AddIgnoredActor(this);
+	TEnumAsByte<ECollisionChannel> TraceProperties = ECC_Visibility;
+	GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, TraceProperties, QueryParams);
+	DrawDebugLine(GetWorld(), TraceStart, TraceEnd, Hit.bBlockingHit ? FColor::Blue : FColor::Red);
+
+	if (!Hit.bBlockingHit && GetCharacterMovement()->IsFalling()) return true;
+
+	return false;
+}
+
+void AITPCharacter::RecordOriginalSettings()
+{
+	originalGravityScale = GetCharacterMovement()->GravityScale;
+	originalWalkingSpeed = GetCharacterMovement()->MaxWalkSpeed;
+	originalDeceleration = GetCharacterMovement()->BrakingDecelerationFalling;
+	originalAcceleration = GetCharacterMovement()->MaxAcceleration;
+	originalAirControl = GetCharacterMovement()->AirControl;
+}
+
+void AITPCharacter::DescendPlayer()
+{
+	if (CurrentVelocity.Z != descendingRate * -1.f && bIsGliding) 
+	{
+		CurrentVelocity.Z = UKismetMathLibrary::FInterpEaseInOut(CurrentVelocity.Z, descendingRate, delta, 3.f);
+		GetCharacterMovement()->Velocity.Z = descendingRate * -1.f;
+	}
+}
+
+void AITPCharacter::ApplyOriginalSettings()
+{
+	GetCharacterMovement()->GravityScale = originalGravityScale;
+	GetCharacterMovement()->MaxWalkSpeed = originalWalkingSpeed;
+	GetCharacterMovement()->BrakingDecelerationFalling = originalDeceleration;
+	GetCharacterMovement()->MaxAcceleration = originalAcceleration;
+	GetCharacterMovement()->AirControl = originalAirControl;
 }

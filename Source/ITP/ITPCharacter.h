@@ -36,9 +36,31 @@ class AITPCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* JumpAction;
 
+	/** Glide Input Action */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* GlideAction;
+
 	/** Move Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* MoveAction;
+
+	/** DescendingRate */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	float descendingRate = 300;
+
+	/** Attributes for Gliding */
+	bool bIsGliding = false;
+
+	FVector CurrentVelocity;
+
+	float originalGravityScale;
+	float originalWalkingSpeed;
+	float originalDeceleration;
+	float originalAcceleration;
+	float originalAirControl;
+
+	float minimumHeight = 50;
+	float delta;
 
 
 public:
@@ -49,7 +71,19 @@ protected:
 
 	/** Called for movement input */
 	void Move(const FInputActionValue& Value);
-			
+	
+	/** Methods for Gliding */
+	void StartGliding();
+
+	void StopGliding();
+
+	bool CanStartGliding();
+
+	void RecordOriginalSettings();
+
+	void DescendPlayer();
+
+	void ApplyOriginalSettings();
 
 protected:
 	// APawn interface
@@ -57,6 +91,8 @@ protected:
 	
 	// To add mapping context
 	virtual void BeginPlay();
+
+	virtual void Tick(float deltaSeconds) override;
 
 public:
 	/** Returns CameraBoom subobject **/
